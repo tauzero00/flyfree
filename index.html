@@ -1,0 +1,200 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>无人机航测路线规划</title>
+<link rel="stylesheet" href="css/style.css">
+<!-- JSZip 库 -->
+<script src="lib/jszip.min.js"></script>
+</head>
+<body>
+
+<!-- 顶栏 -->
+<div class="topbar">
+  <span class="logo">✈ 航测规划</span>
+  <span class="title">DJI 无人机航线设计工具</span>
+  <button class="tb-btn" id="btnLayer" onclick="App.toggleMapLayer()" title="切换地图图层">
+    🗺 标准地图
+  </button>
+  <button class="tb-btn" onclick="App.importKmz()" title="从 KMZ/KML 导入航线">📂 导入</button>
+  <button class="tb-btn primary" onclick="App.exportKmz()" title="导出 KMZ 到遥控器">📤 导出 KMZ</button>
+</div>
+
+<!-- 主布局 -->
+<div class="main">
+
+  <!-- 侧边栏 -->
+  <div class="sidebar" id="sidebar">
+
+    <!-- 测区绘制 -->
+    <div class="panel-section">
+      <h3>🗺 测区设置</h3>
+      <div class="btn-group">
+        <button class="btn accent" id="btnDraw" onclick="App.startDraw()">✏ 绘制测区</button>
+        <button class="btn danger" id="btnClear" onclick="App.clearAll()">✕ 清除</button>
+      </div>
+      <div id="drawingStatus"></div>
+    </div>
+
+    <!-- 相机预设 -->
+    <div class="panel-section">
+      <h3>📷 相机预设</h3>
+      <div class="preset-btns" id="presetBtns">
+        <button class="preset-btn active" data-preset="mavic3e">Mavic 3E 广角</button>
+        <button class="preset-btn" data-preset="mavic3e_tele">Mavic 3E 长焦</button>
+        <button class="preset-btn" data-preset="p4rtk">Phantom 4 RTK</button>
+        <button class="preset-btn" data-preset="mini4pro">Mini 4 Pro</button>
+        <button class="preset-btn" data-preset="custom">自定义</button>
+      </div>
+    </div>
+
+    <!-- 飞行参数 -->
+    <div class="panel-section">
+      <h3>⚙ 飞行参数</h3>
+      <div id="paramForm">
+        <div class="param-row">
+          <label>飞行高度</label>
+          <input type="number" id="paramAltitude" value="100" min="10" max="500" step="1">
+          <span class="unit">m</span>
+        </div>
+        <div class="param-row">
+          <label>飞行速度</label>
+          <input type="number" id="paramSpeed" value="8" min="1" max="20" step="0.5">
+          <span class="unit">m/s</span>
+        </div>
+        <div class="param-row">
+          <label>航向重叠率</label>
+          <input type="range" id="paramForwardOverlap" value="75" min="50" max="95" step="1"
+            oninput="document.getElementById('forwardOverlapVal').textContent=this.value+'%'">
+          <span class="unit" id="forwardOverlapVal">75%</span>
+        </div>
+        <div class="param-row">
+          <label>旁向重叠率</label>
+          <input type="range" id="paramSideOverlap" value="65" min="40" max="90" step="1"
+            oninput="document.getElementById('sideOverlapVal').textContent=this.value+'%'">
+          <span class="unit" id="sideOverlapVal">65%</span>
+        </div>
+        <div class="param-row">
+          <label>传感器宽度</label>
+          <input type="number" id="paramSensorWidth" value="5472" step="1">
+          <span class="unit">px</span>
+        </div>
+        <div class="param-row">
+          <label>传感器高度</label>
+          <input type="number" id="paramSensorHeight" value="3648" step="1">
+          <span class="unit">px</span>
+        </div>
+        <div class="param-row">
+          <label>焦距</label>
+          <input type="number" id="paramFocalLength" value="24" min="1" max="200" step="0.1">
+          <span class="unit">mm</span>
+        </div>
+        <div class="param-row">
+          <label>像元尺寸</label>
+          <input type="number" id="paramPixelSize" value="2.4" min="0.5" max="20" step="0.1">
+          <span class="unit">μm</span>
+        </div>
+        <div class="param-row">
+          <label>云台俯仰角</label>
+          <input type="number" id="paramGimbalPitch" value="-90" min="-90" max="0" step="1">
+          <span class="unit">°</span>
+        </div>
+        <div class="param-row">
+          <label>航线角度</label>
+          <input type="number" id="paramCourseAngle" value="" min="0" max="180" step="1" placeholder="自动">
+          <span class="unit">°</span>
+        </div>
+      </div>
+      <div class="btn-group" style="margin-top:10px;">
+        <button class="btn accent" id="btnGenerate" onclick="App.generateRoute()">🚀 生成航线</button>
+      </div>
+    </div>
+
+    <!-- 统计信息 -->
+    <div class="panel-section" id="statsSection" style="display:none;">
+      <h3>📊 航线统计</h3>
+      <div class="stat-grid" id="statGrid">
+        <div class="stat-item"><div class="stat-value" id="statPhotoCount">-</div><div class="stat-label">拍照航点</div></div>
+        <div class="stat-item"><div class="stat-value" id="statTotalPoints">-</div><div class="stat-label">总航点数</div></div>
+        <div class="stat-item"><div class="stat-value" id="statTotalDist">-</div><div class="stat-label">总长度 (m)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statEstTime">-</div><div class="stat-label">预估时间</div></div>
+        <div class="stat-item"><div class="stat-value" id="statArea">-</div><div class="stat-label">测区面积 (m²)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statGSD">-</div><div class="stat-label">GSD (cm/px)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statLineSpacing">-</div><div class="stat-label">航线间距 (m)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statPointSpacing">-</div><div class="stat-label">航点间距 (m)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statPhotoCoverW">-</div><div class="stat-label">像幅宽 (m)</div></div>
+        <div class="stat-item"><div class="stat-value" id="statPhotoCoverH">-</div><div class="stat-label">像幅高 (m)</div></div>
+      </div>
+    </div>
+
+    <!-- 飞行模拟 -->
+    <div class="panel-section" id="simSection" style="display:none;">
+      <h3>🎬 飞行模拟</h3>
+      <div class="sim-controls">
+        <button class="btn" id="btnSimStart" onclick="App.simStart()">▶ 开始</button>
+        <button class="btn" id="btnSimPause" onclick="App.simPause()" disabled>⏸ 暂停</button>
+        <button class="btn" id="btnSimStop" onclick="App.simStop()" disabled>⏹ 停止</button>
+        <span style="font-size:11px;color:var(--text-secondary);margin-left:4px;">速度:</span>
+        <select id="simSpeed" onchange="App.simSetSpeed(this.value)" style="
+          width:50px;padding:3px 4px;border:1px solid var(--border);border-radius:4px;
+          background:var(--bg-input);color:var(--text-primary);font-size:11px;">
+          <option value="0.5">0.5x</option>
+          <option value="1" selected>1x</option>
+          <option value="2">2x</option>
+          <option value="5">5x</option>
+          <option value="10">10x</option>
+        </select>
+      </div>
+      <div class="sim-progress"><div class="sim-bar" id="simBar"></div></div>
+      <div class="sim-info">
+        <span id="simCompleted">已飞: 0m</span>
+        <span id="simPercent">0%</span>
+        <span id="simRemaining">剩余: -</span>
+      </div>
+    </div>
+
+    <!-- 历史记录 -->
+    <div class="panel-section">
+      <h3>📋 规划历史</h3>
+      <div id="historyList">
+        <div style="font-size:11px;color:var(--text-muted);text-align:center;padding:16px 0;">
+          暂无记录
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- 地图 -->
+  <div class="map-container">
+    <div id="map"></div>
+  </div>
+
+</div>
+
+<!-- 底栏 -->
+<div class="bottombar">
+  <span id="statusText">🟢 已就绪 — 点击"绘制测区"开始规划</span>
+  <span id="coordInfo">坐标: -, - | 缩放: -</span>
+  <span>WGS-84 ↔ GCJ-02 自动转换</span>
+</div>
+
+<!-- Toast 容器 -->
+<div id="toastContainer"></div>
+
+<!-- 隐藏的文件输入 -->
+<input type="file" id="fileInput" accept=".kmz,.kml" style="display:none"
+  onchange="App.handleFileImport(event)">
+
+<!-- JS 模块（按依赖顺序加载） -->
+<script src="js/coordTransform.js"></script>
+<script src="js/routePlanner.js"></script>
+<script src="js/map.js"></script>
+<script src="js/kmzExport.js"></script>
+<script src="js/flightSim.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
