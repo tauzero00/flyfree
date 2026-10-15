@@ -1,4 +1,4 @@
-﻿# 无人机航测路线规划
+# 无人机航测路线规划
 
 面向 DJI 无人机用户的航测路线规划 Web 工具。在地图上划定测区，自动生成蛇形覆盖航线，支持飞行模拟预览，导出 KMZ 直接导入 DJI Pilot / GS Pro 遥控器执行自动飞行和拍摄任务。
 
@@ -193,19 +193,23 @@ mission.kmz
   航点转向模式统一用「曲线飞行、到点停」(`toPointAndStopWithContinuityCurvature`)——摄像航段是
   整排一条（数百米）、排间仅十几米，用「过点不停」会让 App 规划出连续平滑曲线并在每排末端的
   180° 折返处外扩成大圈（遥控器上显示为一串环路、里程虚增）
-- 转弯航点：`gimbalEvenlyRotate`（触发器 `betweenAdjacentPoints`），维持云台角度
+- 转弯航点：`gimbalEvenlyRotate`（触发器 `reachPoint`、动作组 `parallel`），维持云台角度
 - 最后一段：云台归 `0°`，无拍照动作
 
-按官方 WPML 规范的加硬要求（详见 [DJI 共用元素文档](https://github.com/dji-sdk/Cloud-API-Doc/blob/master/docs/cn/60.api-reference/00.dji-wpml/40.common-element.md)）：
+WPML 字段口径（**以 RC2 / DJI Fly 实测导出样例为准**，详见 [DJI 共用元素文档](https://github.com/dji-sdk/Cloud-API-Doc/blob/master/docs/cn/60.api-reference/00.dji-wpml/40.common-element.md)）：
 
-- `missionConfig` 写入 `wpml:takeOffSecurityHeight`（起飞安全高度，默认取作业高度，可用 `takeOffSecurityHeight` 覆盖）
 - `wpml:actionGroupId` 在单个 KMZ 内**全局唯一且从 0 单调递增**（旧实现每个航点都复用 1、每段复用 2）
-- `gimbalEvenlyRotate` 的 `wpml:actionTriggerType` 必须是 `betweenAdjacentPoints`
-- `takePhoto` / `startRecord` / `stopRecord` 带必需元素 `wpml:fileSuffix`
-- `wpml:actionGroupMode` 统一为规范文档化的 `sequence`
-- 机型枚举 `wpml:droneEnumValue` 可用 `droneEnumValue` / `droneSubEnumValue` 指定；
-  官方合法值仅 89/60/67/77/91（**68 并非飞行器枚举**，它是 Mavic 3M 相机的 payload 值），
-  消费级机型（Mini/Air）不在该规范覆盖面内
+- `wpml:waypointHeadingAngle` 必须落在 **[-180, 180]**：旧实现写入 0~360 的方位角，
+  首段朝西/朝南时写出 `269.0` 这类越界值，DJI 会直接判「执行异常 / 无法执行任务」
+  （实测：首点 89.0 的航线能飞，269.0 / 269.4 的均失败）
+- `takePhoto` / `startRecord` / `stopRecord` 带 `wpml:fileSuffix`
+- 拍照动作组用 `sequence`（保证 悬停→快门 串行）；`gimbalEvenlyRotate` 段组用 `parallel`
+  （企业版文档写的是 `betweenAdjacentPoints`，但 RC2/DJI Fly 自身导出用 `reachPoint` + `parallel`）
+- `wpml:takeOffSecurityHeight` **默认不写**（实测 App 导出的 Mini 5 Pro 航线不含该字段），
+  需要时用参数 `takeOffSecurityHeight` 显式开启（走 DJI Pilot 2 / 司空等企业端时建议开启）
+- 机型枚举：实测 RC2 / DJI Fly 对本项目使用的 Mini 5 Pro 写 `wpml:droneEnumValue = 68`、
+  `droneSubEnumValue = 0`；企业版文档的合法值为 89/60/67/77/91（消费级机型不在该表内）。
+  可用 `droneEnumValue` / `droneSubEnumValue` 参数覆盖
 
 ### 任务拆分（多文件导出）
 
